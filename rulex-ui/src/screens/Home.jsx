@@ -4,7 +4,7 @@ import Dashboard from "../components/Dashboard"
 function Home() {
   return (
     <div>
-      <div className="min-h-screen flex flex-col">
+      <div className="flex flex-col">
         <Dashboard />
       </div>
     </div>
