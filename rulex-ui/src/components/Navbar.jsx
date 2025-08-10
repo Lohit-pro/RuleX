@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom';
 
 function Navbar() {
   return (
-    <div className="w-full bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md py-5">
+    <div className="w-full bg-red-600 text-white shadow-md py-5">
       <div className="w-full max-w-screen-xl mx-auto px-6 flex items-center justify-between">
         
-        <Link to="/" className="text-2xl md:text-4xl font-bold tracking-wide">
+        <Link to="/" className=" flex gap-2 text-2xl md:text-4xl font-bold tracking-wide">
+          <img src='/sg-logo.png' className='w-10' />
           <span className="text-white">Société</span> <span className="text-gray-200">Générale</span>
         </Link>
 

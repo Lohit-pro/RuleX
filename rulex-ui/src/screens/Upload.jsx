@@ -2,6 +2,7 @@ import { useState } from "react";
 import { RiFileExcel2Line } from "react-icons/ri";
 import { MdInbox } from "react-icons/md";
 import Results from "../components/Results";
+import Loading from "../components/Loading";
 
 const ruleOptions = [
   "numeric",
@@ -19,10 +20,12 @@ export default function Upload() {
   const [rules, setRules] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    setLoading(true);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -44,6 +47,8 @@ export default function Upload() {
       headers.forEach((col) => {
         defaultRules[col] = "";
       });
+
+      setLoading(false);
       setRules(defaultRules);
       setFileName(file.name);
     } catch (error) {
@@ -84,6 +89,9 @@ export default function Upload() {
 
   if (showResults)
     return <Results results={results} onBack={handleBackToUpload} />;
+
+  if (loading)
+    return <Loading text="Extracting headers..." />
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-10 flex flex-col gap-8">
