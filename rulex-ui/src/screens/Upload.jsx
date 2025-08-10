@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { RiFileExcel2Line } from "react-icons/ri";
 import { MdInbox } from "react-icons/md";
-import * as XLSX from "xlsx";
 import Results from "../components/Results";
 
 const ruleOptions = [
@@ -14,52 +13,50 @@ const ruleOptions = [
   "range",
 ];
 
-function Upload() {
+export default function Upload() {
   const [fileName, setFileName] = useState("");
   const [columns, setColumns] = useState([]);
   const [rules, setRules] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState([]);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const data = new Uint8Array(event.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    const formData = new FormData();
+    formData.append("file", file);
 
-      const firstRow = jsonData[0];
-      setColumns(firstRow);
+    try {
+      const response = await fetch("http://localhost:8080/api/headers", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch");
+      }
+
+      const headers = await response.json();
+      setColumns(headers);
 
       const defaultRules = {};
-      firstRow.forEach((col) => {
+      headers.forEach((col) => {
         defaultRules[col] = "";
       });
       setRules(defaultRules);
       setFileName(file.name);
-    };
-
-    reader.readAsArrayBuffer(file);
-  };
-
-  const handleRuleChange = (column, selectedRule) => {
-    setRules((prev) => ({
-      ...prev,
-      [column]: selectedRule,
-    }));
+    } catch (error) {
+      console.error("Error uploading file or fetching headers:", error);
+    }
   };
 
   const handleSubmit = () => {
     const payload = {
       fileName,
-      columnRules: Object.entries(rules).map(([column, rule]) => ({
+      columnRules: Object.entries(rules).map(([column, config]) => ({
         column,
-        rule,
+        ...config,
       })),
     };
 
@@ -129,12 +126,18 @@ function Upload() {
           {columns.map((column, index) => (
             <div
               key={index}
-              className="flex flex-col md:flex-row items-start md:items-center gap-4 bg-gray-50 p-4 rounded-md shadow"
+              className="flex flex-col gap-2 bg-gray-50 p-4 rounded-md shadow"
             >
-              <div className="font-medium w-40">{column}</div>
+              <div className="font-medium">{column}</div>
+
               <select
-                value={rules[column]}
-                onChange={(e) => handleRuleChange(column, e.target.value)}
+                value={rules[column]?.rule || ""}
+                onChange={(e) =>
+                  setRules((prev) => ({
+                    ...prev,
+                    [column]: { ...prev[column], rule: e.target.value },
+                  }))
+                }
                 className="border border-gray-300 rounded-md px-3 py-2 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-red-400"
               >
                 <option value="">-- Select Rule --</option>
@@ -144,6 +147,97 @@ function Upload() {
                   </option>
                 ))}
               </select>
+
+              {rules[column]?.rule === "alphabet" && (
+                <div className="flex gap-4">
+                  <label>
+                    <input
+                      type="radio"
+                      name={`alphabet-${index}`}
+                      value="upper"
+                      checked={rules[column]?.case === "upper"}
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: { ...prev[column], case: e.target.value },
+                        }))
+                      }
+                    />{" "}
+                    UPPERCASE
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name={`alphabet-${index}`}
+                      value="lower"
+                      checked={rules[column]?.case === "lower"}
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: { ...prev[column], case: e.target.value },
+                        }))
+                      }
+                    />{" "}
+                    lowercase
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name={`alphabet-${index}`}
+                      value="both"
+                      checked={rules[column]?.case === "both"}
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: { ...prev[column], case: e.target.value },
+                        }))
+                      }
+                    />{" "}
+                    Both
+                  </label>
+                </div>
+              )}
+
+              {rules[column]?.rule === "range" && (
+                <div className="flex gap-4">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    className="border px-2 py-1 rounded w-24"
+                    onChange={(e) =>
+                      setRules((prev) => ({
+                        ...prev,
+                        [column]: { ...prev[column], min: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    className="border px-2 py-1 rounded w-24"
+                    onChange={(e) =>
+                      setRules((prev) => ({
+                        ...prev,
+                        [column]: { ...prev[column], max: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              )}
+
+              {rules[column]?.rule === "regex" && (
+                <input
+                  type="text"
+                  placeholder="Enter regex pattern"
+                  className="border px-2 py-1 rounded w-full md:w-80"
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      [column]: { ...prev[column], pattern: e.target.value },
+                    }))
+                  }
+                />
+              )}
             </div>
           ))}
 
@@ -158,5 +252,3 @@ function Upload() {
     </div>
   );
 }
-
-export default Upload;

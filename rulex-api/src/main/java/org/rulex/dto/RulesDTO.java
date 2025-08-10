@@ -1,0 +1,71 @@
+package org.rulex.dto;
+
+public class RulesDTO {
+    private Range numeric = new Range();
+    private String alphabet;
+    private boolean email;
+    private boolean date;
+    private boolean nonEmpty;
+
+    public Range getNumeric() {
+        return numeric;
+    }
+
+    public void setNumeric(Range numeric) {
+        this.numeric = numeric;
+    }
+
+    public String getAlphabet() {
+        return alphabet;
+    }
+
+    public void setAlphabet(String alphabet) {
+        this.alphabet = alphabet;
+    }
+
+    public boolean isEmail() {
+        return email;
+    }
+
+    public void setEmail(boolean email) {
+        this.email = email;
+    }
+
+    public boolean isDate() {
+        return date;
+    }
+
+    public void setDate(boolean date) {
+        this.date = date;
+    }
+
+    public boolean isNonEmpty() {
+        return nonEmpty;
+    }
+
+    public void setNonEmpty(boolean nonEmpty) {
+        this.nonEmpty = nonEmpty;
+    }
+
+    public static class Range {
+        private Integer min = 0;
+        private Integer max = 0;
+
+        public Integer getMin() {
+            return min;
+        }
+
+        public void setMin(Integer min) {
+            this.min = min;
+        }
+
+        public Integer getMax() {
+            return max;
+        }
+
+        public void setMax(Integer max) {
+            this.max = max;
+        }
+    }
+}
+
