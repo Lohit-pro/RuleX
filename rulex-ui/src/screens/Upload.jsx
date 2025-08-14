@@ -4,15 +4,7 @@ import { MdInbox } from "react-icons/md";
 import Results from "../components/Results";
 import Loading from "../components/Loading";
 
-const ruleOptions = [
-  "numeric",
-  "alphabet",
-  "email",
-  "date",
-  "non-empty",
-  "regex",
-  "range",
-];
+const ruleOptions = ["numeric", "alphabet", "email", "date", "non-empty"];
 
 export default function Upload() {
   const [fileName, setFileName] = useState("");
@@ -31,7 +23,7 @@ export default function Upload() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:8080/api/headers", {
+      const response = await fetch("https://rule-x.vercel.app/api/headers", {
         method: "POST",
         body: formData,
       });
@@ -73,7 +65,6 @@ export default function Upload() {
       'Non-numeric value at Row 8, Column "Age": value = "twenty-five"',
       'Empty value at Row 3, Column "Date of Joining"',
       'Invalid date format at Row 6, Column "Start Date": value = "31-13-2022"',
-      'Regex mismatch at Row 4, Column "Employee ID": value = "#EMP123"',
     ];
 
     setResults(mockResults);
@@ -91,8 +82,7 @@ export default function Upload() {
   if (showResults)
     return <Results results={results} onBack={handleBackToUpload} />;
 
-  if (loading)
-    return <Loading text="Extracting headers..." />
+  if (loading) return <Loading text="Extracting headers..." />;
 
   return (
     <div className="w-full max-w-screen-xl mx-auto px-4 py-10 flex flex-col gap-8">
@@ -157,6 +147,33 @@ export default function Upload() {
                 ))}
               </select>
 
+              {rules[column]?.rule === "numeric" && (
+                <div className="flex gap-4">
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    className="border px-2 py-1 rounded w-24"
+                    onChange={(e) =>
+                      setRules((prev) => ({
+                        ...prev,
+                        [column]: { ...prev[column], min: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    className="border px-2 py-1 rounded w-24"
+                    onChange={(e) =>
+                      setRules((prev) => ({
+                        ...prev,
+                        [column]: { ...prev[column], max: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              )}
+
               {rules[column]?.rule === "alphabet" && (
                 <div className="flex gap-4">
                   <label>
@@ -205,47 +222,6 @@ export default function Upload() {
                     Both
                   </label>
                 </div>
-              )}
-
-              {rules[column]?.rule === "range" && (
-                <div className="flex gap-4">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    className="border px-2 py-1 rounded w-24"
-                    onChange={(e) =>
-                      setRules((prev) => ({
-                        ...prev,
-                        [column]: { ...prev[column], min: e.target.value },
-                      }))
-                    }
-                  />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    className="border px-2 py-1 rounded w-24"
-                    onChange={(e) =>
-                      setRules((prev) => ({
-                        ...prev,
-                        [column]: { ...prev[column], max: e.target.value },
-                      }))
-                    }
-                  />
-                </div>
-              )}
-
-              {rules[column]?.rule === "regex" && (
-                <input
-                  type="text"
-                  placeholder="Enter regex pattern"
-                  className="border px-2 py-1 rounded w-full md:w-80"
-                  onChange={(e) =>
-                    setRules((prev) => ({
-                      ...prev,
-                      [column]: { ...prev[column], pattern: e.target.value },
-                    }))
-                  }
-                />
               )}
             </div>
           ))}
