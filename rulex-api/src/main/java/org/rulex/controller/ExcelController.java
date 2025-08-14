@@ -32,4 +32,9 @@ public class ExcelController {
         return excelService.validateExcel(requestDTO);
     }
 
+    @GetMapping("/test")
+    public String test(){
+        return "test";
+    }
+
 }
