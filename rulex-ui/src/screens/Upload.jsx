@@ -53,6 +53,7 @@ export default function Upload() {
       setFileName(file.name);
     } catch (error) {
       console.error("Error uploading file or fetching headers:", error);
+      setLoading(false)
     }
   };
 

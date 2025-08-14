@@ -1,5 +1,8 @@
 package org.rulex.utils;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DateUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,6 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 
 @Service
 public class ExcelServiceUtils {
@@ -51,6 +56,51 @@ public class ExcelServiceUtils {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public File loadFileFromBackend(String fileName) {
+        try {
+            return new File(XL_FILES_PATH, fileName);
+        } catch (Exception e) {
+            LOGGER.error("Something went wrong loading the file from the backend");
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean isNumber(Cell cell) {
+        return cell.getCellType() == CellType.NUMERIC;
+    }
+
+    public boolean isUpperAlphabet(Cell cell) {
+        String cellValue = cell.getStringCellValue().trim();
+        return cellValue.matches("[A-Z]+");
+    }
+
+    public boolean isLowerAlphabet(Cell cell) {
+        String cellValue = cell.getStringCellValue().trim();
+        return cellValue.matches("[a-z]+");
+    }
+
+    public boolean isAlphabet(Cell cell) {
+        String cellValue = cell.getStringCellValue().trim();
+        return cellValue.matches("[\\p{L}\\s]+");
+    }
+
+    public boolean isEmail(Cell cell) {
+        String cellValue = cell.getStringCellValue().trim();
+        return cellValue.matches("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+    }
+
+    public boolean isDate(Cell cell) {
+        return false;
+    }
+
+    public boolean isNonEmpty(Cell cell) {
+        return !cell.getStringCellValue().isEmpty();
+    }
+
+    public boolean isInRange(Integer num, Integer min, Integer max) {
+        return min <= num && num <= max;
     }
 
 }

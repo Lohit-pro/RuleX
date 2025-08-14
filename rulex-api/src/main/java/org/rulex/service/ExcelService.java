@@ -1,6 +1,7 @@
 package org.rulex.service;
 
 import org.apache.poi.ss.usermodel.*;
+import org.rulex.dto.RequestDTO;
 import org.rulex.utils.ExcelServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -21,8 +23,13 @@ public class ExcelService {
     ExcelServiceUtils excelServiceUtils;
     private static final Logger LOGGER = LoggerFactory.getLogger(ExcelService.class);
 
-    public void validateExcel() {
+    public List<String> validateExcel(RequestDTO requestDTO) {
+        List<String> errorsList = null;
+        File file = excelServiceUtils.loadFileFromBackend(requestDTO.getFileName());
 
+
+
+        return errorsList;
     }
 
     public List<String> getColumnHeaders(MultipartFile file) {

@@ -48,8 +48,13 @@ public class RulesDTO {
     }
 
     public static class Range {
-        private Integer min = 0;
-        private Integer max = 0;
+        private Integer min;
+        private Integer max;
+
+        public Range() {
+            this.min = 0;
+            this.max = 0;
+        }
 
         public Integer getMin() {
             return min;

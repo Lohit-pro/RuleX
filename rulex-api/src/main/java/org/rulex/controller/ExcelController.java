@@ -1,5 +1,6 @@
 package org.rulex.controller;
 
+import org.rulex.dto.RequestDTO;
 import org.rulex.service.ExcelService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @CrossOrigin(origins = "http://localhost:5173")
@@ -25,9 +27,9 @@ public class ExcelController {
         return excelService.getColumnHeaders(file);
     }
 
-    @GetMapping("/test")
-    private String test() {
-        return "test";
+    @PostMapping("/validate")
+    public List<String> validateExcel(@RequestBody RequestDTO requestDTO) {
+        return excelService.validateExcel(requestDTO);
     }
 
 }
