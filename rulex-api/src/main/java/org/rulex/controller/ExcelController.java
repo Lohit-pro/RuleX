@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = "https://rule-x.vercel.app/")
 @RestController
 @RequestMapping("/api")
 public class ExcelController {
