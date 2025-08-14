@@ -23,7 +23,7 @@ export default function Upload() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("https://rule-x.vercel.app/api/headers", {
+      const response = await fetch("https://rulex-api.onrender.com/api/headers", {
         method: "POST",
         body: formData,
       });
