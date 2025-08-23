@@ -32,7 +32,7 @@ export default function Upload() {
     formData.append("file", file);
 
     try {
-      const response = await fetch("http://localhost:8080/api/headers", {
+      const response = await fetch("https://rulex-api.onrender.com/api/headers", {
         method: "POST",
         body: formData,
       });
@@ -79,7 +79,7 @@ export default function Upload() {
     // ];
 
     try {
-      const response = await fetch("http://localhost:8080/api/validate", {
+      const response = await fetch("https://rulex-api.onrender.com/api/validate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
