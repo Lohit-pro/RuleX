@@ -18,7 +18,7 @@ function Footer() {
   ];
 
   return (
-    <footer className="bg-black text-white py-10">
+    <footer className="bg-black text-white py-10 z-10">
       <div className="max-w-screen-xl mx-auto px-4 text-center flex flex-col items-center gap-8">
         <h1 className="text-3xl font-bold tracking-wide text-white">
           Rule<span className="text-red-500">X</span> Engine
