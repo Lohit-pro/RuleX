@@ -65,18 +65,16 @@ export default function Upload() {
       fileName,
       rules: Object.entries(rules).map(([column, config]) => ({
         column,
-        ...config,
+        rule: {
+          type: config.rule,
+          min: config.min || null,
+          max: config.max || null,
+          caseType: config.caseType ? config.caseType : "both",
+          apiUrl: config.apiUrl || null,
+          nonEmpty: config.nonEmpty || false,
+        },
       })),
     };
-
-    console.log("Submitting to backend:", payload);
-
-    // const mockResults = [
-    //   'Invalid email format at Row 5, Column "Email": value = "john.doe.com"',
-    //   'Non-numeric value at Row 8, Column "Age": value = "twenty-five"',
-    //   'Empty value at Row 3, Column "Date of Joining"',
-    //   'Invalid date format at Row 6, Column "Start Date": value = "31-13-2022"',
-    // ];
 
     try {
       const response = await fetch("https://rulex-api.onrender.com/api/validate", {
@@ -99,7 +97,6 @@ export default function Upload() {
       console.error("Error Validating the file :", error);
     }
 
-    // setResults(mockResults);
     setShowResults(true);
   };
 
@@ -113,8 +110,8 @@ export default function Upload() {
 
   if (showResults)
     return (
-      <div className="flex flex-col gap-32">
-        <Results results={results} onBack={handleBackToUpload} />
+      <div className="flex flex-col gap-2">
+        <Results results={results} onBack={handleBackToUpload} fileName={fileName} />
         <Footer />
       </div>
     );
@@ -162,126 +159,135 @@ export default function Upload() {
 
             {columns.map((column, index) => (
               <div
-      key={index}
-      className="flex flex-col gap-2 p-4 rounded-md shadow-sm border border-gray-400 max-w-2xl"
-    >
-      <div className="font-medium text-lg">{column}</div>
+                key={index}
+                className="flex flex-col gap-2 p-4 rounded-md shadow-sm border border-gray-400 max-w-2xl"
+              >
+                <div className="font-medium text-lg">{column}</div>
 
-      <select
-        value={rules[column]?.rule || ""}
-        onChange={(e) =>
-          setRules((prev) => ({
-            ...prev,
-            [column]: { ...prev[column], rule: e.target.value },
-          }))
-        }
-        className="border border-gray-300 bg-white rounded-md px-3 py-2 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-red-400"
-      >
-        <option value="">-- Select Rule --</option>
-        {ruleOptions.map((rule) => (
-          <option key={rule} value={rule}>
-            {rule}
-          </option>
-        ))}
-      </select>
+                <select
+                  value={rules[column]?.rule || ""}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      [column]: { ...prev[column], rule: e.target.value },
+                    }))
+                  }
+                  className="border border-gray-300 bg-white rounded-md px-3 py-2 w-full md:w-64 focus:outline-none focus:ring-2 focus:ring-red-400"
+                >
+                  <option value="">-- Select Rule --</option>
+                  {ruleOptions.map((rule) => (
+                    <option key={rule} value={rule}>
+                      {rule}
+                    </option>
+                  ))}
+                </select>
 
-      {rules[column]?.rule === "Numeric" && (
-        <div className="flex gap-4">
-          <input
-            type="number"
-            placeholder="Min"
-            className="border px-2 py-1 rounded w-24 bg-white"
-            onChange={(e) =>
-              setRules((prev) => ({
-                ...prev,
-                [column]: { ...prev[column], min: e.target.value },
-              }))
-            }
-          />
-          <input
-            type="number"
-            placeholder="Max"
-            className="border px-2 py-1 rounded w-24 bg-white"
-            onChange={(e) =>
-              setRules((prev) => ({
-                ...prev,
-                [column]: { ...prev[column], max: e.target.value },
-              }))
-            }
-          />
-        </div>
-      )}
+                {rules[column]?.rule === "Numeric" && (
+                  <div className="flex gap-4">
+                    <input
+                      type="number"
+                      placeholder="Min"
+                      className="border px-2 py-1 rounded w-24 bg-white"
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: { ...prev[column], min: e.target.value },
+                        }))
+                      }
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      className="border px-2 py-1 rounded w-24 bg-white"
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: { ...prev[column], max: e.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                )}
 
-      {rules[column]?.rule === "Alphabet" && (
-        <div className="flex gap-4">
-          <label>
-            <input
-              type="radio"
-              name={`alphabet-${index}`}
-              value="upper"
-              checked={rules[column]?.case === "upper"}
-              onChange={(e) =>
-                setRules((prev) => ({
-                  ...prev,
-                  [column]: { ...prev[column], case: e.target.value },
-                }))
-              }
-            />{" "}
-            UPPERCASE
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={`alphabet-${index}`}
-              value="lower"
-              checked={rules[column]?.case === "lower"}
-              onChange={(e) =>
-                setRules((prev) => ({
-                  ...prev,
-                  [column]: { ...prev[column], case: e.target.value },
-                }))
-              }
-            />{" "}
-            lowercase
-          </label>
-          <label>
-            <input
-              type="radio"
-              name={`alphabet-${index}`}
-              value="both"
-              checked={rules[column]?.case === "both"}
-              onChange={(e) =>
-                setRules((prev) => ({
-                  ...prev,
-                  [column]: { ...prev[column], case: e.target.value },
-                }))
-              }
-            />{" "}
-            Both
-          </label>
-        </div>
-      )}
+                {rules[column]?.rule === "Alphabet" && (
+                  <div className="flex gap-4">
+                    <label>
+                      <input
+                        type="radio"
+                        name={`alphabet-${index}`}
+                        value="upper"
+                        checked={rules[column]?.caseType === "upper"}
+                        onChange={(e) =>
+                          setRules((prev) => ({
+                            ...prev,
+                            [column]: {
+                              ...prev[column],
+                              caseType: e.target.value,
+                            },
+                          }))
+                        }
+                      />{" "}
+                      UPPERCASE
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`alphabet-${index}`}
+                        value="lower"
+                        checked={rules[column]?.caseType === "lower"}
+                        onChange={(e) =>
+                          setRules((prev) => ({
+                            ...prev,
+                            [column]: {
+                              ...prev[column],
+                              caseType: e.target.value,
+                            },
+                          }))
+                        }
+                      />{" "}
+                      lowercase
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name={`alphabet-${index}`}
+                        value="both"
+                        checked={rules[column]?.caseType === "both"}
+                        onChange={(e) =>
+                          setRules((prev) => ({
+                            ...prev,
+                            [column]: {
+                              ...prev[column],
+                              caseType: e.target.value,
+                            },
+                          }))
+                        }
+                      />{" "}
+                      Both
+                    </label>
+                  </div>
+                )}
 
-      {rules[column]?.rule === "Check In API" && (
-        <div className="flex gap-4">
-          <input
-            type="text"
-            className="border border-gray-300 px-2 py-1 rounded w-96 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
-            placeholder="Enter API link"
-            value={rules[column]?.apiValue || ""}
-            onChange={(e) =>
-              setRules((prev) => ({
-                ...prev,
-                [column]: {
-                  ...prev[column],
-                  apiValue: e.target.value,
-                },
-              }))
-            }
-          />
-        </div>
-      )}
-    </div>
+                {rules[column]?.rule === "Check In API" && (
+                  <div className="flex gap-4">
+                    <input
+                      type="text"
+                      className="border border-gray-300 px-2 py-1 rounded w-96 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                      placeholder="Enter API link"
+                      value={rules[column]?.apiValue || ""}
+                      onChange={(e) =>
+                        setRules((prev) => ({
+                          ...prev,
+                          [column]: {
+                            ...prev[column],
+                            apiValue: e.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             ))}
 
             <button

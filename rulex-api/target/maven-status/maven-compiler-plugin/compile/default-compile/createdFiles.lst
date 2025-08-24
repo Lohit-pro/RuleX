@@ -1,7 +1,7 @@
-org\rulex\dto\RequestDTO.class
 org\rulex\utils\ExcelServiceUtils.class
-org\rulex\dto\RulesDTO.class
-org\rulex\dto\RulesDTO$Range.class
 org\rulex\App.class
+org\rulex\dto\ColumnValidationDTO.class
 org\rulex\controller\ExcelController.class
+org\rulex\dto\Rule.class
+org\rulex\dto\ColumnValidationDTO$ColumnRule.class
 org\rulex\service\ExcelService.class

@@ -1,6 +1,6 @@
 D:\RuleX\rulex-api\src\main\java\org\rulex\App.java
 D:\RuleX\rulex-api\src\main\java\org\rulex\controller\ExcelController.java
-D:\RuleX\rulex-api\src\main\java\org\rulex\dto\RequestDTO.java
-D:\RuleX\rulex-api\src\main\java\org\rulex\dto\RulesDTO.java
+D:\RuleX\rulex-api\src\main\java\org\rulex\dto\ColumnValidationDTO.java
+D:\RuleX\rulex-api\src\main\java\org\rulex\dto\Rule.java
 D:\RuleX\rulex-api\src\main\java\org\rulex\service\ExcelService.java
 D:\RuleX\rulex-api\src\main\java\org\rulex\utils\ExcelServiceUtils.java
