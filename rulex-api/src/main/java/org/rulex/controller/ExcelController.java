@@ -2,6 +2,7 @@ package org.rulex.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.mail.MessagingException;
 import org.rulex.dto.ColumnValidationDTO;
 import org.rulex.service.ExcelService;
 import org.slf4j.Logger;
@@ -17,7 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-@CrossOrigin(origins = "https://rule-x.vercel.app/")
+@CrossOrigin(origins = "${host.dns}")
 @RestController
 @RequestMapping("/api")
 public class ExcelController {
@@ -41,6 +42,11 @@ public class ExcelController {
     @GetMapping("/download")
     public ResponseEntity<Resource> downloadReport(@RequestParam String fileName) throws IOException {
         return excelService.downloadReport(fileName);
+    }
+
+    @PostMapping("/email")
+    public void sendEmail (@RequestParam String toEmail, @RequestParam String fileName) throws MessagingException, IOException {
+        excelService.sendEmail(toEmail, fileName);
     }
 
     @GetMapping("/test")

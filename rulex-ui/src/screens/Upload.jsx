@@ -124,7 +124,7 @@ export default function Upload() {
         <div className="flex flex-col items-center gap-4">
           <label
             htmlFor="excel-upload"
-            className="px-6 py-3 bg-green-800 shadow-lg text-white border border-green-800 rounded-md cursor-pointer hover:bg-white hover:text-black hover:border-black flex items-center gap-2 transition-colors duration-300"
+            className="px-6 py-3 bg-green-800 shadow-lg text-white border border-green-800 rounded-sm cursor-pointer hover:bg-white hover:text-black hover:border-black flex items-center gap-2 transition-colors duration-300"
           >
             <span>Upload Excel File</span>
             <RiFileExcel2Line />

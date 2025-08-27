@@ -6,6 +6,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.rulex.dto.Rule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,8 +26,12 @@ import java.util.List;
 public class ExcelServiceUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ExcelServiceUtils.class);
-    private static final String XL_FILES_PATH = "./src/main/resources/xlfiles/";
-    private static final String ERROR_FILES_PATH = "./src/main/resources/errorcells/";
+
+    @Value("${excel.files.path}")
+    private String XL_FILES_PATH;
+
+    @Value("${error.files.path}")
+    private String ERROR_FILES_PATH;
 
 
     public void saveExcelAtBackend(MultipartFile file) throws IOException {

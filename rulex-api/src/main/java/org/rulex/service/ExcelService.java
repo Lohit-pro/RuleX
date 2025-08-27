@@ -1,5 +1,7 @@
 package org.rulex.service;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -9,27 +11,33 @@ import org.rulex.utils.ExcelServiceUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class ExcelService {
 
     @Autowired
     ExcelServiceUtils excelServiceUtils;
-    private static final String ERROR_FILES_PATH = "./src/main/resources/errorcells/";
+
+    @Autowired
+    JavaMailSender mailSender;
+
+    @Value("${error.files.path}")
+    private String ERROR_FILES_PATH;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ExcelService.class);
 
     public List<String> validateExcel(ColumnValidationDTO requestDTO) {
@@ -153,7 +161,7 @@ public class ExcelService {
 
             InputStreamResource resource = new InputStreamResource(new FileInputStream(reportFile));
 
-            excelServiceUtils.removeFileFromBackend(fileName);
+//            excelServiceUtils.removeFileFromBackend(fileName);
 //            excelServiceUtils.removeFileFromBackend("Report_" + fileName);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + reportFile.getName())
@@ -167,4 +175,43 @@ public class ExcelService {
         return null;
     }
 
+    public void sendEmail(String toEmail, String fileName) throws MessagingException, IOException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        File file = excelServiceUtils.loadFileFromBackend(fileName);
+        List<String> errorCells = excelServiceUtils.loadErrorCellsData(fileName);
+        excelServiceUtils.highlightErrorFields(file, errorCells, fileName);
+
+//        helper.setFrom("noreply.rulex@gmail.com");
+//        helper.setTo(toEmail);
+//        helper.setSubject("Report from RuleX");
+//        helper.setText("Here is your validation report.");
+
+        helper.setFrom("noreply.rulex@gmail.com");
+        helper.setTo(toEmail);
+        helper.setSubject("Validation Report - RuleX");
+
+        String htmlContent = """
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #ffffff;">Rule<span style="color: red;">X</span> Validation Report</h2>
+        <p>Hello,</p>
+        
+        <p>We’ve completed validating your uploaded Excel file. Please find your detailed report attached below.</p>
+        
+        <p style="margin-top: 20px;">Thank you for using <strong>RuleX</strong>.  
+        Save time, reduce errors, and keep your data clean 🚀</p>
+        
+        <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;" />
+        <p style="font-size: 12px; color: #6b7280;">
+            This is an automated email from RuleX App. Please do not reply.  
+        </p>
+    </div>
+    """;
+
+        helper.setText(htmlContent, true);
+        helper.addAttachment("Report_" + fileName, excelServiceUtils.loadFileFromBackend("Report_" + fileName));
+
+        mailSender.send(message);
+    }
 }
