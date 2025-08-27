@@ -292,7 +292,7 @@ export default function Upload() {
 
             <button
               onClick={handleSubmit}
-              className="cursor-pointer self-start px-6 py-2 mb-2 bg-red-600 text-white text-lg rounded-md hover:bg-white hover:text-black hover:border-black border border-red-600 transition-colors duration-300"
+              className="cursor-pointer self-start px-6 py-2 mb-2 bg-red-600 text-white text-lg rounded-sm hover:bg-white hover:text-black hover:border-black border border-red-600 transition-colors duration-300"
             >
               Submit Rules
             </button>

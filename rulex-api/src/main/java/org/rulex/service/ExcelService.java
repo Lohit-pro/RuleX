@@ -190,11 +190,11 @@ public class ExcelService {
 
         helper.setFrom("noreply.rulex@gmail.com");
         helper.setTo(toEmail);
-        helper.setSubject("Validation Report - RuleX");
+        helper.setSubject("Validation Report For " + fileName + " - RuleX");
 
         String htmlContent = """
     <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <h2 style="color: #ffffff;">Rule<span style="color: red;">X</span> Validation Report</h2>
+        <h2>Rule<span style="color: red;">X</span> Validation Report</h2>
         <p>Hello,</p>
         
         <p>We’ve completed validating your uploaded Excel file. Please find your detailed report attached below.</p>
