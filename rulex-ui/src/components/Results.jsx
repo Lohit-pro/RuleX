@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { MdCheckCircle, MdErrorOutline } from "react-icons/md";
 import { RiFileExcel2Line } from "react-icons/ri";
 
+const API_BASE_URL = "http://localhost:8080/api";
+
 function Results({ results, onBack, fileName }) {
   const [emailButtonTrigger, setEmailButtonTrigger] = useState(false);
   const [toEmail, setToEmail] = useState("");
@@ -10,7 +12,7 @@ function Results({ results, onBack, fileName }) {
   const visibleResults = showAll ? results : results.slice(0, maxToShow);
 
   const handleDownload = () => {
-    fetch(`https://rulex-api.onrender.com/api/download?fileName=${fileName}`)
+    fetch(`${API_BASE_URL}/download?fileName=${fileName}`)
       .then((response) => {
         if (!response.ok) throw new Error("Download failed");
         return response.blob();
@@ -29,7 +31,7 @@ function Results({ results, onBack, fileName }) {
 
 const handleEmailSubmit = async () => {
   try {
-    const response = await fetch("https://rulex-api.onrender.com/api/email", {
+    const response = await fetch(`${API_BASE_URL}/email`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",

@@ -1,6 +1,6 @@
 !.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+**/src/main/**/target/
+**/src/test/**/target/
 
 ### IntelliJ IDEA ###
 .idea/modules.xml
@@ -30,8 +30,12 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+/target/
+
 ### VS Code ###
 .vscode/
 
 ### Mac OS ###
 .DS_Store
+
+*.xlsx

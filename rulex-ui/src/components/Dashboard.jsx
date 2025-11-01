@@ -10,8 +10,12 @@ function Dashboard() {
             Rule<span className="text-red-600">X</span> Engine
           </h1>
           <p className="text-lg md:text-2xl max-w-xl text-gray-700">
-            Upload your Excel, set a few rules, and let the app find the issues
-            for you — <span className="text-red-600 font-semibold">faster, easier, and zero manual checks.</span>
+            Upload your Excel and let the app automatically clean and validate your data
+            — <span className="text-red-600 font-semibold">faster, easier, and zero manual checks.</span>
+            <br />
+            <span className="text-base md:text-lg text-gray-600 mt-2 block">
+              Choose between <span className="font-semibold">Validation Mode</span> to find issues or <span className="font-semibold text-green-600">Auto Clean Mode</span> to automatically fix them!
+            </span>
           </p>
           <UploadButton link='/upload' text='Upload Excel' />
         </div>

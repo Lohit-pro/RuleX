@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { RiFileExcel2Line } from "react-icons/ri";
-import { MdInbox } from "react-icons/md";
+import { MdInbox, MdAutoFixHigh } from "react-icons/md";
 import Results from "../components/Results";
+import AutoCleanResults from "../components/AutoCleanResults";
 import Loading from "../components/Loading";
 import Footer from "../components/Footer";
+
+const API_BASE_URL = "http://localhost:8080/api";
 
 const ruleOptions = [
   "Numeric",
@@ -17,22 +20,29 @@ const ruleOptions = [
 
 export default function Upload() {
   const [fileName, setFileName] = useState("");
+  const [uploadedFile, setUploadedFile] = useState(null); // Store the file object
   const [columns, setColumns] = useState([]);
   const [rules, setRules] = useState({});
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState("validation"); // "validation" or "autoclean"
+  const [autoCleanResults, setAutoCleanResults] = useState(null);
+  const [isAutoCleaning, setIsAutoCleaning] = useState(false);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    // Store the file for later use in auto-clean
+    setUploadedFile(file);
     setLoading(true);
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
-      const response = await fetch("https://rulex-api.onrender.com/api/headers", {
+      const response = await fetch(`${API_BASE_URL}/headers`, {
         method: "POST",
         body: formData,
       });
@@ -77,7 +87,7 @@ export default function Upload() {
     };
 
     try {
-      const response = await fetch("https://rulex-api.onrender.com/api/validate", {
+      const response = await fetch(`${API_BASE_URL}/validate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,15 +110,63 @@ export default function Upload() {
     setShowResults(true);
   };
 
+  const handleAutoClean = async () => {
+    if (!uploadedFile) {
+      alert("Please upload a file first");
+      return;
+    }
+    
+    setIsAutoCleaning(true);
+    const formData = new FormData();
+    
+    // Use the stored file reference
+    formData.append("file", uploadedFile);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/autoclean`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Auto-clean failed");
+      }
+
+      const cleanResult = await response.json();
+      setAutoCleanResults(cleanResult);
+      setMode("autoclean");
+      setShowResults(true);
+    } catch (error) {
+      console.error("Error auto-cleaning file:", error);
+      alert("Failed to auto-clean file. Please try again.");
+    } finally {
+      setIsAutoCleaning(false);
+    }
+  };
+
   const handleBackToUpload = () => {
     setFileName("");
+    setUploadedFile(null);
     setColumns([]);
     setRules({});
     setShowResults(false);
     setResults([]);
+    setAutoCleanResults(null);
+    setMode("validation");
+    // Reset file input
+    const fileInput = document.getElementById("excel-upload");
+    if (fileInput) fileInput.value = "";
   };
 
-  if (showResults)
+  if (showResults && mode === "autoclean")
+    return (
+      <div className="flex flex-col gap-2">
+        <AutoCleanResults results={autoCleanResults} onBack={handleBackToUpload} fileName={fileName} />
+        <Footer />
+      </div>
+    );
+
+  if (showResults && mode === "validation")
     return (
       <div className="flex flex-col gap-2">
         <Results results={results} onBack={handleBackToUpload} fileName={fileName} />
@@ -117,11 +175,37 @@ export default function Upload() {
     );
 
   if (loading) return <Loading text="Extracting headers..." />;
+  if (isAutoCleaning) return <Loading text="Auto-cleaning your Excel file..." />;
 
   return (
     <div className="w-full flex overflow-hidden min-h-screen">
       <div className="w-full max-w-screen-xl mx-auto px-4 py-10 flex flex-col gap-8 overflow-y-auto z-10">
         <div className="flex flex-col items-center gap-4">
+          {/* Mode Selector */}
+          <div className="flex gap-4 mb-4">
+            <button
+              onClick={() => setMode("validation")}
+              className={`px-4 py-2 rounded-sm transition-colors ${
+                mode === "validation"
+                  ? "bg-red-600 text-white border-2 border-red-600"
+                  : "bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400"
+              }`}
+            >
+              Validation Mode
+            </button>
+            <button
+              onClick={() => setMode("autoclean")}
+              className={`px-4 py-2 rounded-sm transition-colors flex items-center gap-2 ${
+                mode === "autoclean"
+                  ? "bg-green-600 text-white border-2 border-green-600"
+                  : "bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400"
+              }`}
+            >
+              <MdAutoFixHigh />
+              Auto Clean Mode
+            </button>
+          </div>
+
           <label
             htmlFor="excel-upload"
             className="px-6 py-3 bg-green-800 shadow-lg text-white border border-green-800 rounded-sm cursor-pointer hover:bg-white hover:text-black hover:border-black flex items-center gap-2 transition-colors duration-300"
@@ -151,7 +235,36 @@ export default function Upload() {
           </div>
         )}
 
-        {columns.length > 0 && (
+        {columns.length > 0 && mode === "autoclean" && (
+          <div className="flex flex-col gap-6 items-center">
+            <div className="text-2xl font-bold text-gray-800 mb-4">
+              Auto Clean Mode
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 max-w-2xl">
+              <div className="text-lg font-semibold text-blue-800 mb-2">
+                🤖 Intelligent Data Cleaning
+              </div>
+              <div className="text-gray-700 space-y-2">
+                <p>• Automatically detects column types (Email, Date, Name, Phone, etc.)</p>
+                <p>• Cleans and normalizes data using smart algorithms</p>
+                <p>• Fixes formatting issues and invalid entries</p>
+                <p>• Optionally uses AI for enhanced type inference</p>
+              </div>
+              <div className="mt-4 text-sm text-gray-600">
+                Just click "Auto Clean Excel" below to process your file!
+              </div>
+            </div>
+            <button
+              onClick={handleAutoClean}
+              className="cursor-pointer px-6 py-3 mb-2 bg-green-600 text-white text-lg rounded-sm hover:bg-white hover:text-black hover:border-black border border-green-600 transition-colors duration-300 flex items-center gap-2"
+            >
+              <MdAutoFixHigh />
+              Auto Clean Excel
+            </button>
+          </div>
+        )}
+
+        {columns.length > 0 && mode === "validation" && (
           <div className="flex flex-col gap-6">
             <div className="text-2xl font-bold text-gray-800">
               Set Validation Rules:
