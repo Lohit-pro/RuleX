@@ -9,6 +9,8 @@ public class CleanResultDTO {
     private int totalCorrections;
     private List<ColumnInfo> columns;
     private List<CorrectionInfo> sampleCorrections;
+    private Map<String, Object> aiInference; // Store AI inference for refinement
+    private Map<String, List<String>> columnSamples; // Store original column samples
 
     public static class ColumnInfo {
         private int index;
@@ -68,5 +70,9 @@ public class CleanResultDTO {
     public void setColumns(List<ColumnInfo> columns) { this.columns = columns; }
     public List<CorrectionInfo> getSampleCorrections() { return sampleCorrections; }
     public void setSampleCorrections(List<CorrectionInfo> sampleCorrections) { this.sampleCorrections = sampleCorrections; }
+    public Map<String, Object> getAiInference() { return aiInference; }
+    public void setAiInference(Map<String, Object> aiInference) { this.aiInference = aiInference; }
+    public Map<String, List<String>> getColumnSamples() { return columnSamples; }
+    public void setColumnSamples(Map<String, List<String>> columnSamples) { this.columnSamples = columnSamples; }
 }
 

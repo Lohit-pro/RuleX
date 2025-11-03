@@ -123,7 +123,7 @@ export default function Upload() {
     formData.append("file", uploadedFile);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/autoclean`, {
+      const response = await fetch(`${API_BASE_URL}/autoclean?aiOnly=true`, {
         method: "POST",
         body: formData,
       });

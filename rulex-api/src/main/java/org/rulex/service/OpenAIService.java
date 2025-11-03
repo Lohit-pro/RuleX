@@ -2,6 +2,7 @@ package org.rulex.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.rulex.dto.ColumnInference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,41 +32,173 @@ public class OpenAIService {
     @Value("${openai.model:gpt-4}")
     private String model;
 
+    // Simple cache to avoid duplicate API calls for similar patterns
+    private static final Map<String, Map<String, ColumnInference>> cache = new HashMap<>();
+    private static final int MAX_CACHE_SIZE = 50;
+
     public Map<String, ColumnInference> inferColumnTypes(Map<String, List<String>> columnSamples) {
         if (!enabled || apiKey == null || apiKey.isEmpty()) {
-            LOGGER.warn("OpenAI API is disabled or API key not configured");
             return new HashMap<>();
         }
 
+        // Create cache key from column samples
+        String cacheKey = createCacheKey(columnSamples);
+        
+        // Check cache first
+        if (cache.containsKey(cacheKey)) {
+            return new HashMap<>(cache.get(cacheKey));
+        }
+
         try {
-            // Build the prompt
+            // Build the prompt (reduced sample size)
             String prompt = buildInferencePrompt(columnSamples);
             
             // Make API call
             String response = callOpenAI(prompt);
             
-            // Parse response
-            return parseInferenceResponse(response, columnSamples);
+            if (response == null) {
+                return new HashMap<>();
+            }
             
-        } catch (Exception e) {
-            LOGGER.error("Error calling OpenAI API: {}", e.getMessage(), e);
+            // Parse response
+            Map<String, ColumnInference> result = parseInferenceResponse(response, columnSamples);
+            
+            // Cache the result
+            if (cache.size() >= MAX_CACHE_SIZE) {
+                cache.clear(); // Simple eviction - clear when full
+            }
+            cache.put(cacheKey, result);
+            
+            return result;
+            
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && (e.getMessage().contains("429") || e.getMessage().contains("quota"))) {
+                return new HashMap<>();
+            }
             return new HashMap<>();
+        } catch (Exception e) {
+            return new HashMap<>();
+        }
+    }
+
+    private String createCacheKey(Map<String, List<String>> columnSamples) {
+        // Create a simple hash-like key from column sample patterns
+        StringBuilder key = new StringBuilder();
+        for (Map.Entry<String, List<String>> entry : columnSamples.entrySet()) {
+            key.append(entry.getKey()).append(":");
+            List<String> samples = entry.getValue();
+            if (!samples.isEmpty()) {
+                // Use first and last sample for pattern matching
+                key.append(samples.get(0).length()).append("-")
+                   .append(samples.get(samples.size() - 1).length());
+            }
+            key.append("|");
+        }
+        return key.toString();
+    }
+
+    public Map<String, ColumnInference> refineInference(
+            Map<String, List<String>> columnSamples,
+            Map<String, ColumnInference> previousInference,
+            String feedback,
+            boolean autoRegenerate) {
+        
+        if (!enabled || apiKey == null || apiKey.isEmpty()) {
+            LOGGER.warn("OpenAI API is disabled or API key not configured");
+            return previousInference; // Return previous if AI disabled
+        }
+
+        try {
+            // Build refinement prompt
+            String prompt = buildRefinementPrompt(columnSamples, previousInference, feedback, autoRegenerate);
+            
+            // Make API call
+            String response = callOpenAI(prompt);
+            
+            if (response == null) {
+                return previousInference;
+            }
+            
+            Map<String, ColumnInference> refinedInference = parseInferenceResponse(response, columnSamples);
+            
+            // Merge with previous inference if needed
+            for (String columnName : columnSamples.keySet()) {
+                if (!refinedInference.containsKey(columnName) && previousInference.containsKey(columnName)) {
+                    refinedInference.put(columnName, previousInference.get(columnName));
+                }
+            }
+            
+            return refinedInference;
+            
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && (e.getMessage().contains("429") || e.getMessage().contains("quota"))) {
+                return previousInference;
+            }
+            return previousInference;
+        } catch (Exception e) {
+            return previousInference;
         }
     }
 
     private String buildInferencePrompt(Map<String, List<String>> columnSamples) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("Analyze the following column data samples and infer the column type and cleaning rules.\n");
-        prompt.append("For each column, determine the type (EMAIL, NUMERIC, DATE, NAME, PHONE, CATEGORICAL, or UNKNOWN) ");
-        prompt.append("and provide cleaning rules.\n\n");
-        prompt.append("Data samples:\n");
+        prompt.append("Infer column types from these samples. Types: EMAIL, NUMERIC, DATE, NAME, PHONE, CATEGORICAL, UNKNOWN.\n\n");
         
+        for (Map.Entry<String, List<String>> entry : columnSamples.entrySet()) {
+            prompt.append(entry.getKey()).append(": ");
+            // Use fewer samples to reduce token usage (max 3 instead of all)
+            List<String> limitedSamples = entry.getValue().stream()
+                .limit(3)
+                .map(v -> "\"" + v + "\"")
+                .toList();
+            prompt.append(String.join(", ", limitedSamples));
+            prompt.append("\n");
+        }
+        
+        prompt.append("\nJSON format: {\"Column1\": {\"type\": \"EMAIL\", \"cleaningRules\": []}, ...}\n");
+        
+        return prompt.toString();
+    }
+
+    private String buildRefinementPrompt(
+            Map<String, List<String>> columnSamples,
+            Map<String, ColumnInference> previousInference,
+            String feedback,
+            boolean autoRegenerate) {
+        
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You previously analyzed these column data samples and provided this inference:\n\n");
+        
+        // Show previous inference
+        prompt.append("Previous Inference:\n");
+        for (Map.Entry<String, ColumnInference> entry : previousInference.entrySet()) {
+            prompt.append(entry.getKey()).append(": {\n");
+            prompt.append("  \"type\": \"").append(entry.getValue().getType()).append("\",\n");
+            prompt.append("  \"cleaningRules\": [");
+            prompt.append(String.join(", ", entry.getValue().getCleaningRules().stream()
+                .map(r -> "\"" + r + "\"")
+                .toList()));
+            prompt.append("]\n");
+            prompt.append("},\n");
+        }
+        
+        prompt.append("\nOriginal Data Samples:\n");
         for (Map.Entry<String, List<String>> entry : columnSamples.entrySet()) {
             prompt.append(entry.getKey()).append(": ");
             prompt.append(String.join(", ", entry.getValue().stream()
                 .map(v -> "\"" + v + "\"")
                 .toList()));
             prompt.append("\n");
+        }
+        
+        if (autoRegenerate) {
+            prompt.append("\nPlease refine and improve the previous inference. ");
+            prompt.append("Look for areas where the column type detection or cleaning rules could be more accurate. ");
+            prompt.append("Provide an improved version while maintaining the same JSON structure.\n");
+        } else if (feedback != null && !feedback.trim().isEmpty()) {
+            prompt.append("\nUser Feedback: ").append(feedback).append("\n\n");
+            prompt.append("Based on this feedback, please refine the previous inference. ");
+            prompt.append("Address the user's concerns while maintaining the same JSON structure.\n");
         }
         
         prompt.append("\nRespond with a JSON object in this exact format:\n");
@@ -89,7 +222,7 @@ public class OpenAIService {
             Map.of("role", "user", "content", prompt)
         ));
         requestBody.put("temperature", 0.3);
-        requestBody.put("max_tokens", 2000);
+        requestBody.put("max_tokens", 500); // Reduced from 2000 to minimize cost
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -112,9 +245,17 @@ public class OpenAIService {
                 }
             }
             
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 404) {
+                throw new RuntimeException("Model '" + model + "' not found.", e);
+            } else if (e.getStatusCode().value() == 401) {
+                throw new RuntimeException("Invalid API key.", e);
+            } else if (e.getStatusCode().value() == 429) {
+                return null; // Quota exceeded - silent fallback
+            }
+            throw new RuntimeException("API error: " + e.getStatusCode(), e);
         } catch (Exception e) {
-            LOGGER.error("Error calling OpenAI API", e);
-            throw new RuntimeException("Failed to call OpenAI API: " + e.getMessage(), e);
+            throw new RuntimeException("API call failed: " + e.getMessage(), e);
         }
 
         return null;
@@ -165,17 +306,17 @@ public class OpenAIService {
         return inferences;
     }
 
-    public static class ColumnInference {
-        private final String type;
-        private final List<String> cleaningRules;
-
-        public ColumnInference(String type, List<String> cleaningRules) {
-            this.type = type;
-            this.cleaningRules = cleaningRules;
-        }
-
-        public String getType() { return type; }
-        public List<String> getCleaningRules() { return cleaningRules; }
-    }
+//    public static class ColumnInference {
+//        private final String type;
+//        private final List<String> cleaningRules;
+//
+//        public ColumnInference(String type, List<String> cleaningRules) {
+//            this.type = type;
+//            this.cleaningRules = cleaningRules;
+//        }
+//
+//        public String getType() { return type; }
+//        public List<String> getCleaningRules() { return cleaningRules; }
+//    }
 }
 

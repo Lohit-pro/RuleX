@@ -2,6 +2,7 @@ package org.rulex.service;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.rulex.dto.ColumnInference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +24,15 @@ public class ExcelAutoCleaner {
     @Autowired(required = false)
     private OpenAIService openAIService;
 
-    @Value("${openai.api.enabled:false}")
+    @Value("${openai.api.enabled:true}")
     private boolean aiEnabled;
+    
+    // Free alternative: Hugging Face (optional)
+    @Autowired(required = false)
+    private org.rulex.service.HuggingFaceService huggingFaceService;
+    
+    @Value("${huggingface.api.enabled:true}")
+    private boolean hfEnabled;
 
     // Patterns for type detection
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
@@ -40,6 +48,11 @@ public class ExcelAutoCleaner {
     };
 
     public CleanResult cleanExcel(String inputFilePath, String outputFilePath) {
+        return cleanExcel(inputFilePath, outputFilePath, false);
+    }
+
+    // New overload to force AI-only inference for all columns (used by autoclean?aiOnly=true)
+    public CleanResult cleanExcel(String inputFilePath, String outputFilePath, boolean aiOnly) {
         CleanResult result = new CleanResult();
         
         try (FileInputStream fis = new FileInputStream(inputFilePath);
@@ -54,16 +67,85 @@ public class ExcelAutoCleaner {
             Row headerRow = sheet.getRow(0);
             int numColumns = headerRow.getLastCellNum();
             
-            // Step 1: Infer column types
+            // Step 1: Infer column types (rule-based first)
             List<ColumnMetadata> columnMetadata = inferColumnTypes(sheet, numColumns);
             result.setColumnMetadata(columnMetadata);
 
-            // Step 2: Optionally use AI for inference
-            if (aiEnabled && openAIService != null) {
-                try {
-                    enhanceWithAI(sheet, columnMetadata);
-                } catch (Exception e) {
-                    LOGGER.warn("AI inference failed, falling back to rule-based: {}", e.getMessage());
+            // Step 2: AI inference
+            Map<String, List<String>> columnSamples = new HashMap<>();
+            Map<String, ColumnInference> aiInferences = new HashMap<>();
+            
+            // If aiOnly: build samples for ALL columns and override types using AI
+            if (aiOnly && hfEnabled && huggingFaceService != null) {
+                columnSamples = extractSamplesForAllColumns(columnMetadata);
+                if (!columnSamples.isEmpty()) {
+                    aiInferences = huggingFaceService.inferColumnTypes(columnSamples);
+                    if (aiInferences != null && !aiInferences.isEmpty()) {
+                        // Override all column types with AI when available
+                        for (ColumnMetadata colMeta : columnMetadata) {
+                            String key = "Column" + (colMeta.getIndex() + 1);
+                           ColumnInference inf = aiInferences.get(key);
+                            if (inf != null) {
+                                try {
+                                    ColumnType aiType = ColumnType.valueOf(inf.getType().toUpperCase());
+                                    colMeta.setType(aiType);
+                                } catch (IllegalArgumentException ignored) {}
+                            }
+                        }
+                        result.setColumnSamples(columnSamples);
+                        result.setAiInferences(aiInferences);
+                    }
+                }
+            } else if (aiOnly && aiEnabled && openAIService != null) {
+                // AI-only using OpenAI when Hugging Face is not enabled
+                columnSamples = extractSamplesForAllColumns(columnMetadata);
+                if (!columnSamples.isEmpty()) {
+                    aiInferences = openAIService.inferColumnTypes(columnSamples);
+                    if (aiInferences != null && !aiInferences.isEmpty()) {
+                        for (ColumnMetadata colMeta : columnMetadata) {
+                            String key = "Column" + (colMeta.getIndex() + 1);
+                            ColumnInference inf = aiInferences.get(key);
+                            if (inf != null) {
+                                try {
+                                    ColumnType aiType = ColumnType.valueOf(inf.getType().toUpperCase());
+                                    colMeta.setType(aiType);
+                                } catch (IllegalArgumentException ignored) {}
+                            }
+                        }
+                        result.setColumnSamples(columnSamples);
+                        result.setAiInferences(aiInferences);
+                    }
+                }
+            } else if (!aiOnly) {
+                // Normal optimized mode: AI only for UNKNOWN columns
+                // Try free Hugging Face first, then OpenAI if enabled
+                if (hfEnabled && huggingFaceService != null) {
+                    try {
+                        columnSamples = extractColumnSamples(columnMetadata);
+                        if (!columnSamples.isEmpty()) {
+                            aiInferences = huggingFaceService.inferColumnTypes(columnSamples);
+                            if (aiInferences != null && !aiInferences.isEmpty()) {
+                                applyAIInferences(columnMetadata, aiInferences);
+                                result.setColumnSamples(columnSamples);
+                                result.setAiInferences(aiInferences);
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // Silent fallback
+                    }
+                } else if (aiEnabled && openAIService != null) {
+                    try {
+                        columnSamples = extractColumnSamples(columnMetadata);
+                        if (!columnSamples.isEmpty()) {
+                            aiInferences = enhanceWithAI(sheet, columnMetadata, columnSamples);
+                            if (aiInferences != null && !aiInferences.isEmpty()) {
+                                result.setColumnSamples(columnSamples);
+                                result.setAiInferences(aiInferences);
+                            }
+                        }
+                    } catch (Exception ignored) {
+                        // Silent fallback
+                    }
                 }
             }
 
@@ -118,7 +200,7 @@ public class ExcelAutoCleaner {
                 workbook.write(fos);
             }
 
-            LOGGER.info("Excel cleaned successfully. Output: {}", outputFilePath);
+            // Excel cleaned successfully
             
         } catch (IOException e) {
             LOGGER.error("Error processing Excel file", e);
@@ -126,6 +208,17 @@ public class ExcelAutoCleaner {
         }
 
         return result;
+    }
+
+    private Map<String, List<String>> extractSamplesForAllColumns(List<ColumnMetadata> metadata) {
+        Map<String, List<String>> columnSamples = new HashMap<>();
+        for (ColumnMetadata colMeta : metadata) {
+            if (colMeta.getSamples() != null && !colMeta.getSamples().isEmpty()) {
+                columnSamples.put("Column" + (colMeta.getIndex() + 1),
+                        colMeta.getSamples().stream().limit(5).collect(Collectors.toList()));
+            }
+        }
+        return columnSamples;
     }
 
     private List<ColumnMetadata> inferColumnTypes(Sheet sheet, int numColumns) {
@@ -380,39 +473,72 @@ public class ExcelAutoCleaner {
         return cleaned;
     }
 
-    private void enhanceWithAI(Sheet sheet, List<ColumnMetadata> metadata) {
-        if (openAIService == null) return;
-        
-        // Extract samples for AI analysis
+    private Map<String, List<String>> extractColumnSamples(List<ColumnMetadata> metadata) {
         Map<String, List<String>> columnSamples = new HashMap<>();
         
         for (ColumnMetadata colMeta : metadata) {
-            if (colMeta.getSamples().size() >= 3) {
+            // Only extract samples for columns that need AI help:
+            // - UNKNOWN type (rule-based couldn't detect)
+            // - Low confidence detections
+            // Skip columns that are already well-detected (EMAIL, NUMERIC, DATE, etc.)
+            if (colMeta.getType() == ColumnType.UNKNOWN && colMeta.getSamples().size() >= 3) {
+                // Reduce sample size to minimize API call cost (5 samples instead of 20)
                 columnSamples.put("Column" + (colMeta.getIndex() + 1), 
-                    colMeta.getSamples().stream().limit(20).collect(Collectors.toList()));
+                    colMeta.getSamples().stream().limit(5).collect(Collectors.toList()));
             }
         }
         
-        if (columnSamples.isEmpty()) return;
+        return columnSamples;
+    }
+
+    private Map<String,ColumnInference> enhanceWithAI(
+            Sheet sheet, 
+            List<ColumnMetadata> metadata,
+            Map<String, List<String>> columnSamples) {
         
-        LOGGER.info("Calling AI service for column type inference...");
-        Map<String, OpenAIService.ColumnInference> aiInferences = openAIService.inferColumnTypes(columnSamples);
+        if (openAIService == null || columnSamples.isEmpty()) {
+            return new HashMap<>();
+        }
         
-        // Apply AI inferences to metadata
+        Map<String, ColumnInference> aiInferences = openAIService.inferColumnTypes(columnSamples);
+        
+        // Apply AI inferences to metadata (only for UNKNOWN columns)
         for (ColumnMetadata colMeta : metadata) {
-            String columnKey = "Column" + (colMeta.getIndex() + 1);
-            OpenAIService.ColumnInference inference = aiInferences.get(columnKey);
-            
-            if (inference != null) {
-                try {
-                    ColumnType aiType = ColumnType.valueOf(inference.getType().toUpperCase());
-                    // Use AI type if it's more specific than UNKNOWN
-                    if (aiType != ColumnType.UNKNOWN || colMeta.getType() == ColumnType.UNKNOWN) {
-                        colMeta.setType(aiType);
-                        LOGGER.info("AI inferred type for Column {}: {}", colMeta.getIndex() + 1, aiType);
+            if (colMeta.getType() == ColumnType.UNKNOWN) {
+                String columnKey = "Column" + (colMeta.getIndex() + 1);
+                ColumnInference inference = aiInferences.get(columnKey);
+                
+                if (inference != null) {
+                    try {
+                        ColumnType aiType = ColumnType.valueOf(inference.getType().toUpperCase());
+                        if (aiType != ColumnType.UNKNOWN) {
+                            colMeta.setType(aiType);
+                        }
+                    } catch (IllegalArgumentException ignored) {
+                        // Invalid type - keep UNKNOWN
                     }
-                } catch (IllegalArgumentException e) {
-                    LOGGER.warn("Unknown AI inferred type: {}", inference.getType());
+                }
+            }
+        }
+        
+        return aiInferences;
+    }
+    
+    private void applyAIInferences(List<ColumnMetadata> metadata, Map<String, ColumnInference> aiInferences) {
+        for (ColumnMetadata colMeta : metadata) {
+            if (colMeta.getType() == ColumnType.UNKNOWN) {
+                String columnKey = "Column" + (colMeta.getIndex() + 1);
+                ColumnInference inference = aiInferences.get(columnKey);
+                
+                if (inference != null) {
+                    try {
+                        ColumnType aiType = ColumnType.valueOf(inference.getType().toUpperCase());
+                        if (aiType != ColumnType.UNKNOWN) {
+                            colMeta.setType(aiType);
+                        }
+                    } catch (IllegalArgumentException ignored) {
+                        // Invalid type - keep UNKNOWN
+                    }
                 }
             }
         }
@@ -424,6 +550,8 @@ public class ExcelAutoCleaner {
         private int cleanedRows = 0;
         private int totalRows = 0;
         private List<Correction> corrections = new ArrayList<>();
+        private Map<String, List<String>> columnSamples = new HashMap<>();
+        private Map<String, ColumnInference> aiInferences = new HashMap<>();
 
         public void addCorrection(int row, int col, String original, String cleaned) {
             corrections.add(new Correction(row, col, original, cleaned));
@@ -458,6 +586,10 @@ public class ExcelAutoCleaner {
         public int getTotalRows() { return totalRows; }
         public void setTotalRows(int totalRows) { this.totalRows = totalRows; }
         public List<Correction> getCorrections() { return corrections; }
+        public Map<String, List<String>> getColumnSamples() { return columnSamples; }
+        public void setColumnSamples(Map<String, List<String>> columnSamples) { this.columnSamples = columnSamples; }
+        public Map<String, ColumnInference> getAiInferences() { return aiInferences; }
+        public void setAiInferences(Map<String, ColumnInference> aiInferences) { this.aiInferences = aiInferences; }
     }
 
     public static class ColumnMetadata {
@@ -500,4 +632,5 @@ public class ExcelAutoCleaner {
         EMAIL, NUMERIC, DATE, NAME, PHONE, CATEGORICAL, UNKNOWN
     }
 }
+
 

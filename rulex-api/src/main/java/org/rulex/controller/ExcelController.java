@@ -3,10 +3,13 @@ package org.rulex.controller;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.MessagingException;
+import org.rulex.dto.ColumnInference;
 import org.rulex.dto.ColumnValidationDTO;
 import org.rulex.dto.CleanResultDTO;
+import org.rulex.dto.RefinementRequestDTO;
 import org.rulex.service.ExcelAutoCleaner;
 import org.rulex.service.ExcelService;
+import org.rulex.service.OpenAIService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @CrossOrigin(origins = "${host.dns}")
@@ -36,6 +40,9 @@ public class ExcelController {
 
     @Autowired
     ExcelAutoCleaner excelAutoCleaner;
+
+    @Autowired(required = false)
+    OpenAIService openAIService;
 
     @Value("${excel.files.path}")
     private String XL_FILES_PATH;
@@ -73,7 +80,8 @@ public class ExcelController {
     }
 
     @PostMapping("/autoclean")
-    public ResponseEntity<CleanResultDTO> autoCleanExcel(@RequestParam("file") MultipartFile file) throws IOException {
+    public ResponseEntity<CleanResultDTO> autoCleanExcel(@RequestParam("file") MultipartFile file,
+                                                         @RequestParam(value = "aiOnly", required = false, defaultValue = "false") boolean aiOnly) throws IOException {
         try {
             // Save uploaded file
             excelService.getColumnHeadersWithDefaultType(file);
@@ -85,7 +93,7 @@ public class ExcelController {
             String outputPath = XL_FILES_PATH + outputFileName;
             
             // Clean the Excel file
-            ExcelAutoCleaner.CleanResult result = excelAutoCleaner.cleanExcel(inputPath, outputPath);
+            ExcelAutoCleaner.CleanResult result = excelAutoCleaner.cleanExcel(inputPath, outputPath, aiOnly);
             
             // Convert to DTO
             CleanResultDTO dto = new CleanResultDTO();
@@ -115,6 +123,19 @@ public class ExcelController {
                 .collect(Collectors.toList());
             dto.setSampleCorrections(corrections);
             
+            // Store AI inference and column samples for refinement
+            if (result.getAiInferences() != null && !result.getAiInferences().isEmpty()) {
+                Map<String, Object> aiInferenceMap = new HashMap<>();
+                for (Map.Entry<String, ColumnInference> entry : result.getAiInferences().entrySet()) {
+                    Map<String, Object> inferenceData = new HashMap<>();
+                    inferenceData.put("type", entry.getValue().getType());
+                    inferenceData.put("cleaningRules", entry.getValue().getCleaningRules());
+                    aiInferenceMap.put(entry.getKey(), inferenceData);
+                }
+                dto.setAiInference(aiInferenceMap);
+                dto.setColumnSamples(result.getColumnSamples());
+            }
+            
             return ResponseEntity.ok(dto);
             
         } catch (Exception e) {
@@ -138,6 +159,90 @@ public class ExcelController {
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + cleanedFileName + "\"")
             .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
             .body(resource);
+    }
+
+    @PostMapping("/refine-inference")
+    public ResponseEntity<CleanResultDTO> refineInference(@RequestBody RefinementRequestDTO request) {
+        try {
+            if (openAIService == null) {
+                return ResponseEntity.badRequest()
+                    .header("X-Error-Message", "OpenAI service is not available")
+                    .build();
+            }
+            
+            // Check if we have previous inference data
+            if (request.getPreviousInference() == null || request.getPreviousInference().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .header("X-Error-Message", "No previous inference data available for refinement")
+                    .build();
+            }
+
+            // Convert previous inference from Map to ColumnInference objects
+            Map<String, ColumnInference> previousInference = new HashMap<>();
+            if (request.getPreviousInference() != null) {
+                for (Map.Entry<String, Object> entry : request.getPreviousInference().entrySet()) {
+                    Map<String, Object> inferenceData = (Map<String, Object>) entry.getValue();
+                    String type = (String) inferenceData.get("type");
+                    @SuppressWarnings("unchecked")
+                    List<String> cleaningRules = (List<String>) inferenceData.get("cleaningRules");
+                    previousInference.put(entry.getKey(), 
+                        new ColumnInference(type, cleaningRules != null ? cleaningRules : new ArrayList<>()));
+                }
+            }
+
+            // Refine inference
+            Map<String, ColumnInference> refinedInference = openAIService.refineInference(
+                request.getColumnSamples(),
+                previousInference,
+                request.getFeedback(),
+                request.isAutoRegenerate()
+            );
+
+            // Convert refined inference to DTO format
+            Map<String, Object> aiInferenceMap = new HashMap<>();
+            for (Map.Entry<String, ColumnInference> entry : refinedInference.entrySet()) {
+                Map<String, Object> inferenceData = new HashMap<>();
+                inferenceData.put("type", entry.getValue().getType());
+                inferenceData.put("cleaningRules", entry.getValue().getCleaningRules());
+                aiInferenceMap.put(entry.getKey(), inferenceData);
+            }
+
+            CleanResultDTO dto = new CleanResultDTO();
+            dto.setAiInference(aiInferenceMap);
+            dto.setColumnSamples(request.getColumnSamples());
+
+            // Convert to column info format
+            List<CleanResultDTO.ColumnInfo> columns = new ArrayList<>();
+            int index = 1;
+            for (Map.Entry<String, ColumnInference> entry : refinedInference.entrySet()) {
+                columns.add(new CleanResultDTO.ColumnInfo(
+                    index++,
+                    entry.getValue().getType(),
+                    0 // corrections will be calculated after re-cleaning
+                ));
+            }
+            dto.setColumns(columns);
+
+            return ResponseEntity.ok(dto);
+
+        } catch (RuntimeException e) {
+            // Handle quota/rate limit errors specifically
+            if (e.getMessage() != null && (e.getMessage().contains("429") || e.getMessage().contains("quota"))) {
+                LOGGER.warn("OpenAI quota exceeded during refinement: {}", e.getMessage());
+                return ResponseEntity.status(429)
+                    .header("X-Error-Message", "OpenAI API quota exceeded. Please check your billing or try again later.")
+                    .build();
+            }
+            LOGGER.error("Error refining inference", e);
+            return ResponseEntity.internalServerError()
+                .header("X-Error-Message", "Failed to refine inference: " + e.getMessage())
+                .build();
+        } catch (Exception e) {
+            LOGGER.error("Error refining inference", e);
+            return ResponseEntity.internalServerError()
+                .header("X-Error-Message", "An unexpected error occurred: " + e.getMessage())
+                .build();
+        }
     }
 
 }
